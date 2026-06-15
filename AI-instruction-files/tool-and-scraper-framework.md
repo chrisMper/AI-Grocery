@@ -1,63 +1,71 @@
-# Tool & Scraper Framework
+# Tool & Price Discovery Framework
 
-To ensure fast response times and avoid anti-bot blocks from New Zealand supermarkets (Woolworths, Pak'nSave, New World), **the Coordinator Agent does not scrape websites in real-time.** 
+To ensure fast response times, 100% free operation, and to avoid anti-bot blocks, the platform operates **completely without background scrapers or Playwright/browser automation.**
 
-Instead, data is queried from the Supabase database, which is updated asynchronously by a background scraper.
-
----
-
-## 1. Background Scraper Architecture
-
-The background scraper is a lightweight script executed on a cron schedule (e.g., once daily using GitHub Actions or a local task scheduler).
-
-- **Technology**: Node.js + Playwright to handle client-side rendering and bypass basic Cloudflare checks.
-- **Task**: 
-  1. Navigate to NZ supermarket storefronts (Woolworths, Pak'nSave, New World).
-  2. Query popular products, staples, and categories.
-  3. Parse product name, brand, package size, barcode, current price, promotion details, and image URLs.
-  4. Upsert parsed records into the Supabase database (`products` and `store_products` tables).
-  5. Insert the latest prices into the `price_history` table for historical tracking.
+Instead, the Coordinator Agent uses backend helper functions (tools) that perform a mix of **live API fetching** and **price simulation**.
 
 ---
 
-## 2. Agent Tools (Database Queries)
+## 1. Price Discovery Logic
 
-The Coordinator Agent is equipped with the following tool functions to query the compiled price data:
+- **Woolworths (Live API Fetch)**:
+  - We execute a direct HTTP `fetch` to Woolworths' public search API endpoint.
+  - Endpoint: `https://www.woolworths.co.nz/api/v1/products?searchTerm={query}&page=1&size=20`
+  - This request takes `<1` second, returns standard JSON, requires no authentication, and is not blocked by standard firewalls.
+- **Pak'nSave & New World (Simulation)**:
+  - Since Foodstuffs supermarkets block direct API fetches and web scrapers, their prices are simulated on-the-fly relative to Woolworths live prices.
+  - **Pak'nSave Simulation**: Generates a simulated price between **5% to 15% cheaper** than the Woolworths price (reflecting Pak'nSave's low-price position).
+  - **New World Simulation**: Generates a simulated price between **-5% to +5%** of the Woolworths price.
+  - Both simulated prices are formatted into realistic currency values (e.g. ending in `.00`, `.49`, or `.99`).
+
+---
+
+## 2. Agent Tools (Backend Functions)
+
+The Coordinator Agent is equipped with the following tool functions to find and compare prices:
 
 ### `SearchProducts`
-Searches the database for matching products.
+Searches Woolworths' live API for matching products, and simulates prices for Pak'nSave and New World.
 - **Input Parameters**:
-  - `query` (string): The search query (e.g., 'milk', 'organic bread').
-  - `category` (optional string): Category filter.
-- **Output**: Array of matching products from the `products` table (including ID, name, brand, size, category).
-
-### `ComparePrices`
-Compares the pricing of a specific product across all available stores.
-- **Input Parameters**:
-  - `productId` (string: UUID): The target product ID.
-- **Output**: Detailed price list showing store name, branch, current price, promotional description (e.g. "Save $1.50"), and in-stock status.
+  - `query` (string): The search term (e.g. "milk", "butter", "bananas").
+- **Execution**:
+  1. Calls the Woolworths search API.
+  2. Parses results to get product name, brand, package size, barcode, image URL, and Woolworths price.
+  3. For each product, generates simulated prices for Pak'nSave and New World.
+- **Output**: Array of products:
+  ```json
+  [
+    {
+      "productId": "woolworths-barcode-12345",
+      "name": "Standard Milk 2L",
+      "brand": "Woolworths",
+      "size": "2L",
+      "barcode": "12345",
+      "imageUrl": "...",
+      "prices": {
+        "Woolworths": 3.20,
+        "Pak'nSave": 2.85, // Simulated
+        "New World": 3.30  // Simulated
+      }
+    }
+  ]
+  ```
 
 ### `GetDeals`
-Retrieves products that are currently discounted or on promotion.
+Returns current Woolworths promotions (live) and mock Foodstuffs deals.
 - **Input Parameters**:
-  - `category` (optional string): Filter by product category.
-  - `storeName` (optional string): Filter by store chain (e.g., 'Woolworths').
-- **Output**: Array of products currently having `is_on_promotion = true`.
+  - `category` (optional string): e.g. "Produce", "Bakery".
+- **Execution**:
+  1. Queries Woolworths API with specific promo filter parameters (e.g. `isSpecial=true`).
+  2. Applies a simulator to label random items in Pak'nSave and New World as "Special/On Promotion" with a discount label (e.g., "Save $1.20").
+- **Output**: Array of promotional items.
 
 ### `BuildBasket`
-Calculates and compares the total cost of a shopping list across multiple stores.
+Calculates and compares the total cost of a shopping list across stores.
 - **Input Parameters**:
-  - `items` (array of objects): `[{ "productId": "UUID", "quantity": number }]`
+  - `items` (array of objects): `[{ "productId": "barcode", "quantity": number, "price": number }]`
 - **Output**: Comparison totals:
   - Total cost if bought entirely at Woolworths.
-  - Total cost if bought entirely at Pak'nSave.
-  - Total cost if bought entirely at New World.
+  - Total cost if bought entirely at Pak'nSave (simulated).
+  - Total cost if bought entirely at New World (simulated).
   - The optimized "split basket" option (buying each item at the cheapest store) and the total potential savings.
-
-### `UpdatePreferences`
-Saves user preferences (dietary restrictions, preferred stores, budget limits) to their profile.
-- **Input Parameters**:
-  - `dietaryRestrictions` (optional array of strings): e.g. `["vegan", "gluten-free"]`.
-  - `preferredStores` (optional array of strings: UUIDs): List of preferred store IDs.
-  - `budgetLimit` (optional number): Budget cap.
-- **Output**: Success status confirming update in the `users` table.
