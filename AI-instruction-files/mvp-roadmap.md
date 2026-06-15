@@ -1,32 +1,30 @@
 # MVP Roadmap
 
-Phase 1
-
-- AI Chat Interface
-- Grocery Search
-- Price Comparison
-- Basket Comparison
-
----
-
-Phase 2
-
-- User Memory
-- Price Monitoring
-- Deal Discovery
+## Phase 1 (Core MVP)
+- Clean, premium web chat interface (Next.js + daisyUI)
+- Initial database seeding (NZ supermarkets, stores, and sample products)
+- Local product search and price comparison tool logic
+- Basket total calculation tool logic
 
 ---
 
-Phase 3
-
-- Multi-Agent System
-- Autonomous Weekly Shopping Plans
-- Personalized Savings Assistant
+## Phase 2 (Deals & Scraper)
+- Background scraper script using Playwright (scheduled updates)
+- Supabase database integration (live pricing, store details)
+- Active deals & promotion discovery
+- User preferences storage (dietary restrictions, preferred stores)
 
 ---
 
-Phase 4
+## Phase 3 (Agentic Intelligence)
+- Integration with Gemini API for the Coordinator Agent
+- Natural language query understanding & intent routing
+- Tool-calling integration (Search, Compare, BuildBasket)
+- Personalized savings recommendations and alternative product suggestions
 
-- Mobile App
-- Voice Shopping Assistant
-- Autonomous Purchasing Recommendations
+---
+
+## Phase 4 (Expansion)
+- Email/Web push alerts for price drops
+- Mobile responsive optimization / Progressive Web App (PWA)
+- Voice-enabled shopping assistant integration
